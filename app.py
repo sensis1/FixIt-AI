@@ -10,7 +10,7 @@ app = Flask(__name__)
 CORS(app)
 
 # 🔑 PASTE YOUR KEY FROM https://aistudio.google.com/
-client = genai.Client(api_key="AIzaSyDDn8IP2yTkcHy0YetMMiTyxSTdfn5z-_8")
+client = genai.Client(api_key="")
 
 @app.route('/')
 def home():
