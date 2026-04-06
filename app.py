@@ -3,14 +3,20 @@ import io
 import PIL.Image
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-# This is the new 2026 import style
 from google import genai 
 
 app = Flask(__name__)
 CORS(app)
 
-# 🔑 PASTE YOUR KEY FROM https://aistudio.google.com/
-client = genai.Client(api_key="")
+# ✅ SECURE: Fetches the key from environment variables.
+# On Render, you will set this in the "Environment" tab.
+API_KEY = os.environ.get("GOOGLE_API_KEY")
+
+# Initialize the client only if the key exists
+if API_KEY:
+    client = genai.Client(api_key=API_KEY)
+else:
+    client = None
 
 @app.route('/')
 def home():
@@ -24,6 +30,7 @@ def home():
             .card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
             #output { text-align: left; white-space: pre-wrap; background: #fff; padding: 15px; border-radius: 8px; margin-top: 20px; border: 1px solid #d1d5db; min-height: 50px; }
             button { background: #1d4ed8; color: white; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+            input[type="file"] { margin: 10px 0; }
         </style>
     </head>
     <body>
@@ -61,12 +68,15 @@ def home():
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
+    if not client:
+        return jsonify({"error": "API Key not configured on server."}), 500
+    
     try:
         file = request.files['image']
         image_bytes = file.read()
         img = PIL.Image.open(io.BytesIO(image_bytes))
 
-        # gemini-2.0-flash is the fastest free model in 2026
+        # Using gemini-2.5-flash-lite for speed and cost-efficiency
         response = client.models.generate_content(
             model='gemini-2.5-flash-lite',
             contents=[
@@ -81,5 +91,6 @@ def analyze():
         return jsonify({"error": str(e)})
 
 if __name__ == '__main__':
-    # Use port 5000 to match the JavaScript fetch call
-    app.run(debug=True, port=5000)
+    # '0.0.0.0' and os.environ.get("PORT") are required for Render deployment
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=False, host='0.0.0.0', port=port)
