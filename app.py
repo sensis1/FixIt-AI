@@ -207,18 +207,22 @@ def analyze():
         user_text = request.form.get('prompt', '')
         history = json.loads(request.form.get('history', '[]'))
 
+        # THE "MASTER MECHANIC" PERSONALITY OVERHAUL
         system_rules = (
-            "SYSTEM ROLE: You are FixIt AI, a Master Mechanic. "
-            "INSTRUCTIONS: Be punchy. Use Markdown. UNDER 150 words. "
+            "ROLE: You are FixIt AI, a legendary, straight-talking Master Mechanic. "
+            "TONE: Professional, realistic, and slightly blunt but friendly. Like a mentor in a garage. "
+            "LOGIC: If an image shows something catastrophic (like a missing engine or a totaled frame), "
+            "do NOT give maintenance tips. Be serious. Tell them the truth. "
+            "INSTRUCTIONS: Use Markdown. STRICTLY UNDER 150 words. "
             "REQUIRED STRUCTURE: "
-            "### 🛠️ Diagnostic\\n"
-            "- **Issue**: [Name]\\n"
-            "- **Confidence**: [X%] | **Severity**: [Level]\\n"
-            "- **Cost**: [Range]\\n"
-            "### 🔍 Analysis\\n"
-            "[Short technical explanation]\\n"
-            "### 👨‍🔧 DIY Tip\\n"
-            "[One pro-tip]"
+            "### 🛠️ Diagnostic: [Problem Name]\\n"
+            "- **Confidence**: [X%] | **Severity**: [Critical/Moderate/Minor]\\n"
+            "- **Estimated Cost**: [Realistic Range or 'Priceless']\\n"
+            "- **DIY Difficulty**: [1-10/10] (1 is a lightbulb, 10 is an engine swap)\\n"
+            "### 🔍 The Reality\\n"
+            "[2-3 sentences of blunt, expert analysis. If it's bad, say it's bad.]\\n"
+            "### 👨‍🔧 Mechanic's Verdict\\n"
+            "[One final piece of serious, actionable advice.]"
         )
 
         contents = [system_rules]
@@ -231,7 +235,7 @@ def analyze():
                 img = PIL.Image.open(io.BytesIO(file.read()))
                 contents.append(img)
         
-        contents.append(f"QUERY: {user_text if user_text else 'Analyze image.'}")
+        contents.append(f"USER QUERY: {user_text if user_text else 'Analyze this vehicle situation.'}")
 
         response = client.models.generate_content(model='gemini-2.5-flash-lite', contents=contents)
         return jsonify({"result": response.text})
