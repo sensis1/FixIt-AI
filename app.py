@@ -9,7 +9,6 @@ from google import genai
 app = Flask(__name__)
 CORS(app)
 
-# Secure API Key Fetch
 API_KEY = os.environ.get("GOOGLE_API_KEY")
 client = genai.Client(api_key=API_KEY)
 
@@ -28,7 +27,6 @@ def home():
                 --accent-blue: #38bdf8;
                 --accent-purple: #a855f7;
                 --sidebar-bg: #0f172a;
-                --chat-bg: #1e1b4b;
                 --text-main: #f1f5f9;
             }
             * { box-sizing: border-box; }
@@ -38,12 +36,10 @@ def home():
                 display: flex; flex-direction: column; height: 100vh; overflow: hidden;
             }
 
-            /* CENTERED TOP NAVBAR */
             .navbar {
                 height: 65px; background: #0f172a;
                 border-bottom: 1px solid rgba(255,255,255,0.1);
                 display: flex; align-items: center; justify-content: center; z-index: 1000;
-                position: relative;
             }
             .nav-logo { 
                 font-size: 1.6rem; font-weight: 900; 
@@ -54,7 +50,6 @@ def home():
 
             .view-container { display: flex; flex: 1; overflow: hidden; }
 
-            /* SIDEBAR */
             .sidebar {
                 width: 280px; background: var(--sidebar-bg); border-right: 1px solid rgba(255,255,255,0.05);
                 display: flex; flex-direction: column;
@@ -66,17 +61,14 @@ def home():
                 background: rgba(255,255,255,0.03); font-size: 0.85rem; transition: 0.2s;
                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
             }
-            .history-item:hover { background: rgba(56, 189, 248, 0.1); }
 
-            /* MAIN CHAT */
             .chat-window { flex: 1; display: flex; flex-direction: column; background: radial-gradient(circle at 50% 0%, #1e1b4b 0%, #020617 100%); }
             .chat-scroll { flex: 1; overflow-y: auto; padding: 30px; display: flex; flex-direction: column; gap: 20px; }
             
-            .bubble { max-width: 85%; padding: 18px; border-radius: 15px; line-height: 1.6; font-size: 0.95rem; }
+            .bubble { max-width: 85%; padding: 18px; border-radius: 15px; line-height: 1.6; font-size: 0.95rem; position: relative; }
             .user-bubble { align-self: flex-end; background: linear-gradient(135deg, #4f46e5, #9333ea); color: white; }
             .ai-bubble { align-self: flex-start; background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(255,255,255,0.1); }
 
-            /* INPUT AREA */
             .input-dock { padding: 20px; background: #020617; border-top: 1px solid rgba(255,255,255,0.1); }
             .input-box { max-width: 800px; margin: 0 auto; background: rgba(255,255,255,0.05); border-radius: 15px; padding: 10px; }
             textarea {
@@ -89,25 +81,24 @@ def home():
                 background: var(--accent-blue); color: #020617; border: none; padding: 10px 25px; 
                 border-radius: 8px; font-weight: 800; cursor: pointer;
             }
+            
+            /* Typing Cursor */
+            .typing::after { content: '|'; animation: blink 0.7s infinite; margin-left: 2px; color: var(--accent-blue); }
+            @keyframes blink { 50% { opacity: 0; } }
         </style>
     </head>
     <body>
-        <div class="navbar">
-            <div class="nav-logo">FIXIT AI 🛠️</div>
-        </div>
-
+        <div class="navbar"><div class="nav-logo">FIXIT AI 🛠️</div></div>
         <div class="view-container">
             <aside class="sidebar">
                 <div class="sidebar-title">Recent Reports</div>
                 <div id="historyList" class="history-list"></div>
                 <div style="padding: 20px;"><button onclick="location.reload()" style="width:100%; padding:10px; background:none; border:1px solid gray; color:white; border-radius:5px; cursor:pointer;">+ New Session</button></div>
             </aside>
-
             <main class="chat-window">
                 <div id="chatScroll" class="chat-scroll">
                     <div class="ai-bubble bubble"><strong>System Ready.</strong> Upload an image or type a symptom for a quick mechanical scan.</div>
                 </div>
-
                 <div class="input-dock">
                     <div class="input-box">
                         <textarea id="userInput" rows="2" placeholder="Describe the issue..."></textarea>
@@ -123,6 +114,30 @@ def home():
         <script>
             let memory = [];
 
+            // --- SMOOTH TYPING ENGINE ---
+            function smoothType(element, markdownText) {
+                const htmlContent = marked.parse(markdownText);
+                element.innerHTML = "";
+                element.classList.add('typing');
+                
+                let i = 0;
+                const tempDiv = document.createElement("div");
+                tempDiv.innerHTML = htmlContent;
+                const fullText = tempDiv.innerHTML;
+                
+                // Fast interval for high-end feel
+                const timer = setInterval(() => {
+                    element.innerHTML = fullText.substring(0, i);
+                    i += 4; // Reveal 4 characters at a time for "fast-smooth" look
+                    if (i >= fullText.length + 4) {
+                        element.innerHTML = fullText;
+                        element.classList.remove('typing');
+                        clearInterval(timer);
+                    }
+                    document.getElementById('chatScroll').scrollTop = document.getElementById('chatScroll').scrollHeight;
+                }, 10); 
+            }
+
             async function submitDiagnostic() {
                 const textInput = document.getElementById('userInput');
                 const fileInput = document.getElementById('imageInput');
@@ -133,17 +148,21 @@ def home():
 
                 if (!query && !file) return;
 
+                // 1. ADD USER MSG
                 const uMsg = document.createElement('div');
                 uMsg.className = 'bubble user-bubble';
                 uMsg.innerText = query || "Visual Scan Request";
                 scroll.appendChild(uMsg);
                 
+                // 2. ⚡ AUTO-RESET INPUTS IMMEDIATELY
                 textInput.value = "";
+                fileInput.value = ""; // This "deletes" the file from the box after click
                 scroll.scrollTop = scroll.scrollHeight;
 
+                // 3. AI PLACEHOLDER
                 const aiMsg = document.createElement('div');
                 aiMsg.className = 'bubble ai-bubble';
-                aiMsg.innerText = "Analyzing...";
+                aiMsg.innerText = "...";
                 scroll.appendChild(aiMsg);
 
                 const formData = new FormData();
@@ -156,20 +175,17 @@ def home():
                         method: "POST",
                         body: formData
                     });
-                    
-                    if (!response.ok) throw new Error('Server error');
                     const data = await response.json();
                     
-                    aiMsg.innerHTML = marked.parse(data.result);
+                    // 4. TRIGGER SMOOTH REVEAL
+                    smoothType(aiMsg, data.result);
                     
                     memory.push({role: "user", text: query || "Visual Analysis"});
                     memory.push({role: "model", text: data.result});
-                    scroll.scrollTop = scroll.scrollHeight;
                     
                     updateSidebar(query || "Visual Scan");
-
                 } catch (e) { 
-                    aiMsg.innerText = "Connection Failed. Check your network."; 
+                    aiMsg.innerText = "Connection Failed."; 
                 }
             }
 
@@ -191,21 +207,18 @@ def analyze():
         user_text = request.form.get('prompt', '')
         history = json.loads(request.form.get('history', '[]'))
 
-        # THE REFINED, CONCISE SYSTEM PROMPT
         system_rules = (
             "SYSTEM ROLE: You are FixIt AI, a Master Mechanic. "
-            "INSTRUCTIONS: Be punchy and professional. Use Markdown. "
-            "STRICTLY keep responses under 200 words. "
+            "INSTRUCTIONS: Be punchy. Use Markdown. UNDER 150 words. "
             "REQUIRED STRUCTURE: "
             "### 🛠️ Diagnostic\\n"
-            "- **Issue**: [Technical Name]\\n"
+            "- **Issue**: [Name]\\n"
             "- **Confidence**: [X%] | **Severity**: [Level]\\n"
             "- **Cost**: [Range]\\n"
             "### 🔍 Analysis\\n"
-            "[2-3 sentence technical explanation]\\n"
-            "### 👨‍🔧 DIY\\n"
-            "- **Difficulty**: [1-10]\\n"
-            "- **Quick Tip**: [Pro-tip]"
+            "[Short technical explanation]\\n"
+            "### 👨‍🔧 DIY Tip\\n"
+            "[One pro-tip]"
         )
 
         contents = [system_rules]
@@ -218,15 +231,10 @@ def analyze():
                 img = PIL.Image.open(io.BytesIO(file.read()))
                 contents.append(img)
         
-        contents.append(f"CURRENT QUERY: {user_text if user_text else 'Analyze image.'}")
+        contents.append(f"QUERY: {user_text if user_text else 'Analyze image.'}")
 
-        response = client.models.generate_content(
-            model='gemini-2.5-flash-lite',
-            contents=contents
-        )
-        
+        response = client.models.generate_content(model='gemini-2.5-flash-lite', contents=contents)
         return jsonify({"result": response.text})
-
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
